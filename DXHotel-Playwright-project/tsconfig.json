@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES6",
+    "module": "commonjs",
+    "strict": false,
+    "noImplicitAny": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".", 
+  "paths": {
+  "@core/*": ["src/core/*"],
+  "@interfaces/*": ["src/core/interfaces/*"],
+  "@tasks/*": ["src/core/task/*"],
+  "@infrastructure/*": ["src/infrastructure/playwright/*"],
+  "@question/*": ["src/core/question/*"],
+  "@utils/*":["src/utils/*"]
+}
+  },
+  "include": ["src", "tests"]
+}
