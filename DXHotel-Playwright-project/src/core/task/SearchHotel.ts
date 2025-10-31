@@ -1,10 +1,8 @@
-import { Task } from '@interfaces/Task'
+import { Task } from '@interfaces/Task';
 import { SELECTORS } from '@utils/formSearch';
 import { Actor } from '@core/actor/Actor';
 
-
 export class SearchHotel implements Task {
-
   private checkInDate: string;
   private checkOutDate: string;
   private rooms: string;
@@ -27,16 +25,14 @@ export class SearchHotel implements Task {
     const page = actor.getPage();
     if (!page) throw new Error('Page no inicializada');
 
-
     await page.click(SELECTORS.locationInput);
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
 
-
-    const checkInInput = page.locator('#MainContentPlaceHolder_SearchPanel_SearchPanelLayout_CheckInDateEdit_I');
+    const checkInInput = page.locator(SELECTORS.checkIn);
     await checkInInput.waitFor();
 
-    const checkOutInput = page.locator('#MainContentPlaceHolder_SearchPanel_SearchPanelLayout_CheckOutDateEdit_I');
+    const checkOutInput = page.locator(SELECTORS.checkOut);
     await checkOutInput.waitFor();
 
     await checkInInput.fill(this.checkInDate);
@@ -45,14 +41,14 @@ export class SearchHotel implements Task {
     await checkInInput.evaluate((el: HTMLInputElement) => el.dispatchEvent(new Event('change', { bubbles: true })));
     await checkOutInput.evaluate((el: HTMLInputElement) => el.dispatchEvent(new Event('change', { bubbles: true })));
 
-    await page.fill('input[id="MainContentPlaceHolder_SearchPanel_SearchPanelLayout_RoomsComboBox_I"]', this.rooms);
-    await page.fill('input[id="MainContentPlaceHolder_SearchPanel_SearchPanelLayout_AdultsSpinEdit_I"]', this.adults);
-    await page.fill('input[id="MainContentPlaceHolder_SearchPanel_SearchPanelLayout_ChildrenSpinEdit_I"]', this.childrens);
+    await page.fill(SELECTORS.rooms, this.rooms);
+    await page.fill(SELECTORS.adults, this.adults);
+    await page.fill(SELECTORS.children, this.childrens);
 
-    const searchButton = page.locator('#MainContentPlaceHolder_SearchPanel_SearchPanelLayout_SearchButton_CD');
+    const searchButton = page.locator(SELECTORS.searchButton);
     await searchButton.click();
 
-    await page.waitForSelector('#MainContentPlaceHolder_FilterFormLayout_NightlyRateTrackBar_MD');
+    await page.waitForSelector(SELECTORS.priceSlider);
 
     await page.evaluate(() => {
       const priceControl = (window as any).ASPxClientControl.GetControlCollection().GetByName('MainContentPlaceHolder_FilterFormLayout_NightlyRateTrackBar');
@@ -63,23 +59,19 @@ export class SearchHotel implements Task {
       }
     });
 
-    await page.click('span[id="MainContentPlaceHolder_FilterFormLayout_OurRatingCheckBoxList_RB0_I_D"]');
+    await page.click(SELECTORS.rating1);
+    await page.click(SELECTORS.rating2);
+    await page.click(SELECTORS.filterCell);
 
-    await page.click('span[id="MainContentPlaceHolder_FilterFormLayout_OurRatingCheckBoxList_RB1_I_D"]');
+    await page.waitForSelector(SELECTORS.hotelListLoaded, { timeout: 60000 });
 
-    await page.click('td[id="MainContentPlaceHolder_FilterFormLayout_5"]');
-
-    await page.waitForSelector('.dxdvControl_Metropolis', { timeout: 60000 });
-
-
-    const pagination = page.locator('.dxp-num');
+    const pagination = page.locator(SELECTORS.pagination);
     const totalPages = await pagination.count();
 
     let allPrices: { price: number; pageIndex: number; hotelIndex: number }[] = [];
 
     for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
-      // 1. Extraer precios en la página actual
-      const priceLocators = page.locator('//td[@id="MainContentPlaceHolder_HotelsDataView_ICell"]//div[contains(@class,"price")]');
+      const priceLocators = page.locator(SELECTORS.hotelPrice);
       const count = await priceLocators.count();
 
       for (let i = 0; i < count; i++) {
@@ -89,57 +81,51 @@ export class SearchHotel implements Task {
       }
 
       if (pageIndex < totalPages - 1) {
-        const nextButton = page.locator('#MainContentPlaceHolder_HotelsDataView_PGB_PBN');
-        const currentPageText = await page.locator('.dxp-current').innerText();
+        const nextButton = page.locator(SELECTORS.nextButton);
+        const currentPageText = await page.locator(SELECTORS.currentPage).innerText();
 
         await nextButton.click();
 
-        await page.waitForSelector(`.dxp-current:text-is("${parseInt(currentPageText) + 1}")`, { timeout: 60000 });
+        await page.waitForSelector(`${SELECTORS.currentPage}:text-is("${parseInt(currentPageText) + 1}")`, { timeout: 60000 });
       }
     }
 
     console.log(`Total precios encontrados: ${allPrices.length}`);
     console.log('Precios:', allPrices);
 
-    // Validar que hay precios
     if (allPrices.length === 0) {
-      console.error(' No se encontraron precios.');
+      console.error('No se encontraron precios.');
       return;
     }
 
-    // Encontrar el hotel más barato
     const cheapestHotel = allPrices.reduce((min, hotel) => hotel.price < min.price ? hotel : min, allPrices[0]);
     console.log(`Hotel más barato: Precio = ${cheapestHotel.price}, Página = ${cheapestHotel.pageIndex}, Índice = ${cheapestHotel.hotelIndex}`);
 
-    const currentPageText = await page.locator('.dxp-current').innerText();
+    const currentPageText = await page.locator(SELECTORS.currentPage).innerText();
     const currentPage = parseInt(currentPageText);
 
-    if (currentPage === cheapestHotel.pageIndex) {
-      console.log('Estamos en la página correcta, seleccionando el hotel más barato...');
-    } else {
+    if (currentPage !== cheapestHotel.pageIndex) {
       console.log(`Navegando a la página ${cheapestHotel.pageIndex}...`);
-      const targetPageButton = page.locator('.dxp-num').nth(cheapestHotel.pageIndex - 1);
+      const targetPageButton = page.locator(SELECTORS.pagination).nth(cheapestHotel.pageIndex - 1);
       await Promise.all([
         targetPageButton.click(),
-        page.waitForSelector(`.dxp-current:text-is("${cheapestHotel.pageIndex}")`, { timeout: 60000 })
+        page.waitForSelector(`${SELECTORS.currentPage}:text-is("${cheapestHotel.pageIndex}")`, { timeout: 60000 })
       ]);
     }
 
-    // Seleccionar el botón "Book It" del hotel más barato
-    const hotelLocator = page.locator('//td[@id="MainContentPlaceHolder_HotelsDataView_ICell"]//table//tr//td[contains(@style,"vertical-align:Top")]').nth(cheapestHotel.hotelIndex);
-    const bookButton = hotelLocator.locator('div[id*="BookItButton"]:not([id$="_CD"])');
+    const hotelLocator = page.locator(SELECTORS.hotelCell).nth(cheapestHotel.hotelIndex);
+    const bookButton = hotelLocator.locator(SELECTORS.bookButton);
     await bookButton.click();
 
-
-    page.waitForLoadState('domcontentloaded'),
+    await Promise.all([
+      page.waitForLoadState('domcontentloaded'),
       page.waitForLoadState('networkidle')
-
+    ]);
 
     console.log(`Hotel más barato seleccionado: Precio = ${cheapestHotel.price}`);
 
     actor.remember('cheapestPrice', cheapestHotel.price);
     actor.remember('checkInDate', this.checkInDate);
     actor.remember('checkOutDate', this.checkOutDate);
-
   }
 }
